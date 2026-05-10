@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Cartoon Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & tokens ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink:      #0e0e0e;
+  --paper:    #f5f0e8;
+  --panel:    #ffffff;
+  --accent:   #ff3c2e;
+  --accent2:  #ffe94d;
+  --green:    #22c55e;
+  --blue:     #3b82f6;
+  --muted:    #8a8278;
+  --border:   #0e0e0e;
+  --radius:   4px;
+  --shadow:   4px 4px 0 var(--border);
+  --shadow-lg:6px 6px 0 var(--border);
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(14,14,14,.05) 39px, rgba(14,14,14,.05) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(14,14,14,.05) 39px, rgba(14,14,14,.05) 40px);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+  background: var(--ink);
+  padding: 0 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+  position: sticky; top: 0; z-index: 100;
+  border-bottom: 2px solid var(--border);
+}
+.logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px; letter-spacing: 3px;
+  color: var(--paper);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-badge {
+  background: var(--accent); color: white;
+  font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 2px;
+}
+.header-tag { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 300; }
+
+/* ── Main layout ─────────────────────────────────────────────────────────── */
+main { max-width: 1140px; margin: 0 auto; padding: 48px 32px 80px; }
+
+/* ── Section title ───────────────────────────────────────────────────────── */
+.sec-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 38px; letter-spacing: 2px; line-height: 1;
+  margin-bottom: 6px;
+}
+.sec-sub {
+  font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); font-weight: 300; margin-bottom: 28px;
+}
+
+/* ── Upload zone ─────────────────────────────────────────────────────────── */
+#drop-zone {
+  border: 2.5px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  min-height: 220px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+  position: relative;
+  overflow: hidden;
+}
+#drop-zone:hover, #drop-zone.drag-over {
+  border-color: var(--accent);
+  background: #fff8f7;
+  box-shadow: var(--shadow-lg);
+}
+#drop-zone svg { opacity: .35; transition: opacity .2s; }
+#drop-zone:hover svg { opacity: .8; }
+.dz-label { font-size: 15px; font-weight: 500; text-align: center; }
+.dz-sub   { font-size: 12px; color: var(--muted); text-align: center; }
+#file-input { display: none; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 26px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  letter-spacing: .8px; text-transform: uppercase;
+  cursor: pointer; box-shadow: var(--shadow);
+  transition: transform .1s, box-shadow .1s, background .15s, color .15s;
+  user-select: none;
+}
+.btn:hover  { transform: translate(-2px,-2px); box-shadow: var(--shadow-lg); }
+.btn:active { transform: translate(2px,2px);   box-shadow: 2px 2px 0 var(--border); }
+.btn-primary { background: var(--ink); color: var(--paper); }
+.btn-primary:hover { background: var(--accent); }
+.btn-outline { background: transparent; color: var(--ink); }
+.btn-outline:hover { background: var(--ink); color: var(--paper); }
+
+/* ── Pipeline stages ─────────────────────────────────────────────────────── */
+.pipeline {
+  display: flex; align-items: stretch; gap: 0;
+  border: 2px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow);
+  margin: 40px 0 44px;
+}
+.stage {
+  flex: 1; padding: 22px 20px; background: var(--panel);
+  border-right: 2px solid var(--border);
+  position: relative;
+}
+.stage:last-child { border-right: none; }
+.stage-num {
+  font-family: 'Bebas Neue', sans-serif; font-size: 40px;
+  color: #e8e3da; position: absolute; top: 10px; right: 14px;
+  line-height: 1; user-select: none;
+}
+.stage-icon { font-size: 22px; margin-bottom: 8px; }
+.stage-name { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 300; margin-bottom: 4px; }
+.stage-desc { font-size: 13px; font-weight: 500; line-height: 1.4; }
+.stage.active { background: #fff8f7; }
+.stage.done   { background: #f0fdf4; }
+.stage.done .stage-num { color: #d1fae5; }
+
+/* ── Status badge ────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
+  border: 2px solid var(--border); border-radius: 2px;
+  font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+}
+.badge-real    { background: #fef3c7; }
+.badge-cartoon { background: #dbeafe; }
+.badge-dot { width: 8px; height: 8px; border-radius: 50%; }
+.badge-real .badge-dot    { background: #f59e0b; }
+.badge-cartoon .badge-dot { background: var(--blue); }
+
+/* ── Results grid ────────────────────────────────────────────────────────── */
+.results-section { margin-top: 44px; }
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+@media (max-width: 640px) {
+  .results-grid { grid-template-columns: 1fr; }
+}
+
+.result-card {
+  border: 2px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow);
+  background: var(--panel);
+}
+.result-card-header {
+  background: var(--ink); color: var(--paper);
+  padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.result-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px; }
+.result-card-method { font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+.result-card-body {
+  padding: 0; min-height: 280px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  background: #f8f5f0;
+}
+.result-card-body img { width: 100%; height: 280px; object-fit: contain; display: block; }
+.placeholder {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  color: var(--muted); font-size: 13px; padding: 32px;
+  text-align: center;
+}
+.loading-ring {
+  width: 36px; height: 36px;
+  border: 3px solid #e5e0d8;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Already cartoon notice ──────────────────────────────────────────────── */
+.already-cartoon-notice {
+  border: 2px solid var(--blue);
+  border-radius: var(--radius);
+  background: #eff6ff;
+  padding: 24px 28px;
+  display: flex; align-items: flex-start; gap: 18px;
+}
+.already-icon { font-size: 32px; flex-shrink: 0; }
+.already-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 2px; color: var(--blue); margin-bottom: 6px; }
+.already-body  { font-size: 14px; line-height: 1.6; color: #374151; }
+
+/* ── Classification box ──────────────────────────────────────────────────── */
+#classification-box {
+  border: 2px solid var(--border); border-radius: var(--radius);
+  background: var(--panel); padding: 20px 24px;
+  box-shadow: var(--shadow); margin-bottom: 28px;
+  display: none;
+}
+.clf-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.clf-meta { font-size: 12px; color: var(--muted); }
+.clf-meta strong { color: var(--ink); }
+.conf-bar-wrap { flex: 1; min-width: 140px; }
+.conf-bar-bg { height: 8px; background: #e8e3da; border-radius: 4px; overflow: hidden; }
+.conf-bar-fill { height: 100%; border-radius: 4px; transition: width .6s ease; background: var(--green); }
+
+/* ── Two-col original + result ───────────────────────────────────────────── */
+.original-result-grid {
+  display: none;
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: var(--paper);
+  padding: 12px 24px; border-radius: 3px; border: 2px solid var(--border);
+  font-size: 13px; font-weight: 500; letter-spacing: .5px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s, transform .25s;
+  z-index: 999; max-width: 90vw;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.error { background: var(--accent); }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.divider { border: none; border-top: 2px solid var(--border); margin: 40px 0; }
+.text-muted { color: var(--muted); }
+.mt-4 { margin-top: 16px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+
+/* ── Scores debug table ──────────────────────────────────────────────────── */
+.scores-table { font-size: 12px; border-collapse: collapse; width: 100%; margin-top: 10px; }
+.scores-table th, .scores-table td { padding: 5px 10px; text-align: left; border-bottom: 1px solid #e8e3da; }
+.scores-table th { font-weight: 600; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── Method selector pills ────────────────────────────────────────────────── */
+.method-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px;
+  border: 2px solid var(--border); border-radius: var(--radius);
+  font-size: 13px; font-weight: 600; letter-spacing: .5px;
+  cursor: pointer; background: var(--panel);
+  box-shadow: 3px 3px 0 var(--border);
+  transition: background .15s, transform .1s, box-shadow .1s;
+  user-select: none;
+}
+.method-pill:hover { background: #f0ebe0; transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--border); }
+.method-pill.active { background: var(--ink); color: var(--paper); }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <span class="logo-badge">CV</span>
+    Smart Cartoon Pipeline
+  </div>
+  <span class="header-tag">Real vs Cartoon · MobileNetV2 + CV Heuristic</span>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Pipeline diagram -->
+  <div class="pipeline" id="pipeline-stages">
+    <div class="stage" id="stage-0">
+      <span class="stage-num">01</span>
+      <div class="stage-icon">🖼️</div>
+      <div class="stage-name">Input</div>
+      <div class="stage-desc">Upload any image<br><small class="text-muted">JPG · PNG · WEBP · BMP</small></div>
+    </div>
+    <div class="stage" id="stage-1">
+      <span class="stage-num">02</span>
+      <div class="stage-icon">🧠</div>
+      <div class="stage-name">Classify</div>
+      <div class="stage-desc">MobileNetV2 + CV Heuristic<br><small class="text-muted">Real vs Cartoon</small></div>
+    </div>
+    <div class="stage" id="stage-2">
+      <span class="stage-num">03</span>
+      <div class="stage-icon">⚖️</div>
+      <div class="stage-name">Decision</div>
+      <div class="stage-desc">Skip if already cartoon<br><small class="text-muted">Smart gate</small></div>
+    </div>
+    <div class="stage" id="stage-3">
+      <span class="stage-num">04</span>
+      <div class="stage-icon">🎨</div>
+      <div class="stage-name">Cartoonize</div>
+      <div class="stage-desc">3 methods applied<br><small class="text-muted">Standard · Advanced · Sketch</small></div>
+    </div>
+    <div class="stage" id="stage-4">
+      <span class="stage-num">05</span>
+      <div class="stage-icon">✅</div>
+      <div class="stage-name">Output</div>
+      <div class="stage-desc">Results displayed<br><small class="text-muted">Side-by-side comparison</small></div>
+    </div>
+  </div>
+
+  <!-- Upload section -->
+  <div class="sec-title">Upload Image</div>
+  <div class="sec-sub">Drag & drop or click to select — any real photo or cartoon</div>
+
+  <div id="drop-zone">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <div class="dz-label">Drop an image here</div>
+    <div class="dz-sub">or click to browse · JPG, PNG, WEBP, BMP · max 16 MB</div>
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/bmp"/>
+  </div>
+
+  <!-- BONUS: Method selector -->
+  <div style="margin-top:20px;">
+    <div class="sec-sub" style="margin-bottom:8px;">Cartoonization method</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;" id="method-selector">
+      <label class="method-pill active" data-val="all">
+        <input type="radio" name="method" value="all" checked hidden/> All Three
+      </label>
+      <label class="method-pill" data-val="standard">
+        <input type="radio" name="method" value="standard" hidden/> Standard
+      </label>
+      <label class="method-pill" data-val="advanced">
+        <input type="radio" name="method" value="advanced" hidden/> Advanced
+      </label>
+      <label class="method-pill" data-val="sketch">
+        <input type="radio" name="method" value="sketch" hidden/> Sketch
+      </label>
+    </div>
+  </div>
+
+  <div class="row">
+    <button class="btn btn-primary" id="process-btn" onclick="processImage()" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+      Run Pipeline
+    </button>
+    <button class="btn btn-outline" onclick="resetAll()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+      </svg>
+      Reset
+    </button>
+  </div>
+
+  <hr class="divider"/>
+
+  <!-- BONUS: Timing bar -->
+  <div id="timing-bar" style="display:none;margin-bottom:20px;">
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;
+                border:2px solid var(--border);border-radius:var(--radius);
+                background:var(--panel);padding:14px 20px;box-shadow:var(--shadow);">
+      <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:300;">Inference Timing</span>
+      <span style="font-size:13px;font-weight:600;">Classify: <span id="t-clf" style="color:var(--accent)">--</span> ms</span>
+      <span style="font-size:13px;font-weight:600;">Cartoonize: <span id="t-cart" style="color:var(--blue)">--</span> ms</span>
+      <span style="font-size:13px;font-weight:600;">Total: <span id="t-total" style="color:var(--green)">--</span> ms</span>
+    </div>
+  </div>
+
+  <!-- Classification result box -->
+  <div id="classification-box">
+    <div class="clf-row">
+      <div id="clf-badge"></div>
+      <div class="clf-meta">
+        Confidence: <strong id="clf-conf">—</strong>
+      </div>
+      <div class="conf-bar-wrap">
+        <div class="conf-bar-bg"><div class="conf-bar-fill" id="clf-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+    <table class="scores-table mt-4">
+      <thead><tr><th>Score</th><th>Value</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Neural (real prob)</td><td id="sc-neural">—</td><td>MobileNetV2 sigmoid output</td></tr>
+        <tr><td>Heuristic (cartoon score)</td><td id="sc-heuristic">—</td><td>CV flat-colour + edge + saturation</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Already cartoon notice (hidden by default) -->
+  <div id="already-notice" style="display:none">
+    <div class="already-cartoon-notice">
+      <div class="already-icon">🎭</div>
+      <div>
+        <div class="already-title">This image is already a cartoon.</div>
+        <div class="already-body">
+          The classifier detected this image as a <strong>cartoon</strong>.<br>
+          No cartoonization was applied — upload a real photo to see the transformation.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Original + output results -->
+  <div id="results-section" style="display:none">
+    <div class="sec-title">Results</div>
+    <div class="sec-sub">Original compared to all three cartoonization methods</div>
+
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="result-card-header">
+          <span class="result-card-title">Original</span>
+          <span class="result-card-method">Input image</span>
+        </div>
+        <div class="result-card-body"><div class="placeholder" id="orig-placeholder"><div class="loading-ring"></div>Loading…</div></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header">
+          <span class="result-card-title">Standard</span>
+          <span class="result-card-method">Bilateral + Laplacian + Quantise</span>
+        </div>
+        <div class="result-card-body"><div class="placeholder" id="std-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header">
+          <span class="result-card-title">Advanced</span>
+          <span class="result-card-method">K-Means HSV Clustering</span>
+        </div>
+        <div class="result-card-body"><div class="placeholder" id="adv-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header">
+          <span class="result-card-title">Pencil Sketch</span>
+          <span class="result-card-method">Gaussian Blur Inversion</span>
+        </div>
+        <div class="result-card-body"><div class="placeholder" id="sk-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let selectedFile = null;
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+/* ── Stage highlight ────────────────────────────────────────────────────────── */
+function setStage(n) {
+  for (let i = 0; i <= 4; i++) {
+    const s = document.getElementById('stage-' + i);
+    s.classList.remove('active', 'done');
+    if (i < n) s.classList.add('done');
+    else if (i === n) s.classList.add('active');
+  }
+}
+
+/* ── Drop zone wiring ───────────────────────────────────────────────────────── */
+const dz   = document.getElementById('drop-zone');
+const fInp = document.getElementById('file-input');
+
+dz.addEventListener('click',       () => fInp.click());
+dz.addEventListener('dragover',    e  => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave',   ()  => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fInp.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) { toast('Please upload an image file.', 'error'); return; }
+  selectedFile = file;
+
+  // Preview inside drop zone
+  const reader = new FileReader();
+  reader.onload = ev => {
+    dz.innerHTML = `
+      <img src="${ev.target.result}" style="max-height:200px;max-width:100%;object-fit:contain;border-radius:3px;"/>
+      <div class="dz-sub" style="margin-top:8px;">${file.name} &nbsp;·&nbsp; ${(file.size/1024).toFixed(0)} KB</div>
+      <div class="dz-sub">Click to change image</div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/bmp" style="display:none"/>
+    `;
+    document.getElementById('file-input').addEventListener('change', e => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+  };
+  reader.readAsDataURL(file);
+
+  document.getElementById('process-btn').disabled = false;
+  setStage(0);
+  hideResults();
+  toast('Image loaded — click "Run Pipeline" to process.', '');
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+function resetAll() {
+  selectedFile = null;
+  location.reload();
+}
+
+/* ── Hide results ───────────────────────────────────────────────────────────── */
+function hideResults() {
+  document.getElementById('classification-box').style.display = 'none';
+  document.getElementById('already-notice').style.display   = 'none';
+  document.getElementById('results-section').style.display  = 'none';
+  setStage(0);
+}
+
+/* ── Set image inside card ──────────────────────────────────────────────────── */
+function setCardImage(placeholderId, b64, altText) {
+  const ph = document.getElementById(placeholderId);
+  if (!ph) return;
+  const card = ph.closest('.result-card-body');
+  card.innerHTML = `<img src="${b64}" alt="${altText}" style="width:100%;height:280px;object-fit:contain;"/>`;
+}
+
+/* ── Main pipeline ─────────────────────────────────────────────────────────── */
+async function processImage() {
+  if (!selectedFile) { toast('Please upload an image first.', 'error'); return; }
+
+  const btn = document.getElementById('process-btn');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+
+  hideResults();
+  setStage(1);
+
+  // BONUS: get selected method
+  const methodEl = document.querySelector('input[name="method"]:checked');
+  const method   = methodEl ? methodEl.value : 'all';
+
+  const formData = new FormData();
+  formData.append('image', selectedFile);
+  formData.append('method', method);
+
+  try {
+    const resp = await fetch('/process', { method: 'POST', body: formData });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      toast('Error: ' + (data.error || 'Unknown error'), 'error');
+      setStage(0);
+      return;
+    }
+
+    // BONUS: show timing bar
+    if (data.timing) {
+      document.getElementById('timing-bar').style.display = 'block';
+      document.getElementById('t-clf').textContent  = data.timing.classify_ms;
+      document.getElementById('t-cart').textContent = data.timing.cartoonize_ms;
+      document.getElementById('t-total').textContent= data.timing.total_ms;
+    }
+
+    // -- Show classification -────────────────────────────────────────────────
+    setStage(2);
+    const clf   = data.classification;
+    const isCartoon = data.already_cartoon;
+    const cbox  = document.getElementById('classification-box');
+    cbox.style.display = 'block';
+
+    document.getElementById('clf-badge').innerHTML =
+      isCartoon
+        ? `<span class="badge badge-cartoon"><span class="badge-dot"></span>Cartoon</span>`
+        : `<span class="badge badge-real"><span class="badge-dot"></span>Real Photo</span>`;
+
+    document.getElementById('clf-conf').textContent = clf.confidence.toFixed(1) + '%';
+    const bar = document.getElementById('clf-bar');
+    bar.style.width = clf.confidence + '%';
+    bar.style.background = isCartoon ? '#3b82f6' : '#22c55e';
+
+    document.getElementById('sc-neural').textContent    = clf.neural_score;
+    document.getElementById('sc-heuristic').textContent = clf.heuristic_score;
+
+    // ── Decision: already cartoon? ─────────────────────────────────────────
+    if (isCartoon) {
+      setStage(3);
+      document.getElementById('already-notice').style.display = 'block';
+      // Still show original
+      const rs = document.getElementById('results-section');
+      rs.style.display = 'block';
+      document.getElementById('orig-placeholder').closest('.result-card-body').innerHTML =
+        `<img src="${data.original_b64}" alt="Original" style="width:100%;height:280px;object-fit:contain;"/>`;
+      document.getElementById('std-placeholder').closest('.result-card-body').innerHTML =
+        `<div class="placeholder">Skipped — image is already a cartoon</div>`;
+      document.querySelectorAll('#adv-placeholder, #sk-placeholder').forEach(el => {
+        el.closest('.result-card-body').innerHTML =
+          `<div class="placeholder">Skipped — image is already a cartoon</div>`;
+      });
+      setStage(4);
+      toast('🎭 Cartoon detected — no transformation applied.', '');
+      return;
+    }
+
+    // ── Show results ────────────────────────────────────────────────────────
+    setStage(3);
+    const rs = document.getElementById('results-section');
+    rs.style.display = 'block';
+
+    // Original
+    document.getElementById('orig-placeholder').closest('.result-card-body').innerHTML =
+      `<img src="${data.original_b64}" alt="Original" style="width:100%;height:280px;object-fit:contain;"/>`;
+
+    // Standard
+    if (data.results.standard) {
+      document.getElementById('std-placeholder').closest('.result-card-body').innerHTML =
+        `<img src="${data.results.standard}" alt="Standard" style="width:100%;height:280px;object-fit:contain;"/>`;
+    } else {
+      document.getElementById('std-placeholder').textContent = 'Method failed';
+    }
+
+    // Advanced
+    if (data.results.advanced) {
+      document.getElementById('adv-placeholder').closest('.result-card-body').innerHTML =
+        `<img src="${data.results.advanced}" alt="Advanced" style="width:100%;height:280px;object-fit:contain;"/>`;
+    } else {
+      document.getElementById('adv-placeholder').textContent = 'Method failed';
+    }
+
+    // Sketch
+    if (data.results.sketch) {
+      document.getElementById('sk-placeholder').closest('.result-card-body').innerHTML =
+        `<img src="${data.results.sketch}" alt="Sketch" style="width:100%;height:280px;object-fit:contain;"/>`;
+    } else {
+      document.getElementById('sk-placeholder').textContent = 'Method failed';
+    }
+
+    setStage(4);
+    toast('✓ Pipeline complete!', '');
+
+  } catch (err) {
+    toast('Network error — is the server running?', 'error');
+    setStage(0);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Pipeline`;
+  }
+}
+
+/* ── Allow Enter to trigger ─────────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && selectedFile) processImage();
+});
+
+/* ── Method pill clicks ── */
+document.querySelectorAll('.method-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.method-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    pill.querySelector('input').checked = true;
+  });
+});
+</script>
+</body>
+</html>
