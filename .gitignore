@@ -1,0 +1,13 @@
+# Local / notebook artifacts too large for GitHub (100 MB limit)
+models/scratch_model.keras
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# App uploads / generated output (optional; uncomment if you prefer not to track)
+# static/uploads/
+# static/output/

@@ -419,28 +419,28 @@ main { max-width: 1140px; margin: 0 auto; padding: 48px 32px 80px; }
           <span class="result-card-title">Original</span>
           <span class="result-card-method">Input image</span>
         </div>
-        <div class="result-card-body"><div class="placeholder" id="orig-placeholder"><div class="loading-ring"></div>Loading…</div></div>
+        <div class="result-card-body" id="result-body-orig"><div class="placeholder" id="orig-placeholder"><div class="loading-ring"></div>Loading…</div></div>
       </div>
       <div class="result-card">
         <div class="result-card-header">
           <span class="result-card-title">Standard</span>
           <span class="result-card-method">Bilateral + Laplacian + Quantise</span>
         </div>
-        <div class="result-card-body"><div class="placeholder" id="std-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+        <div class="result-card-body" id="result-body-std"><div class="placeholder" id="std-placeholder"><div class="loading-ring"></div>Processing…</div></div>
       </div>
       <div class="result-card">
         <div class="result-card-header">
           <span class="result-card-title">Advanced</span>
           <span class="result-card-method">K-Means HSV Clustering</span>
         </div>
-        <div class="result-card-body"><div class="placeholder" id="adv-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+        <div class="result-card-body" id="result-body-adv"><div class="placeholder" id="adv-placeholder"><div class="loading-ring"></div>Processing…</div></div>
       </div>
       <div class="result-card">
         <div class="result-card-header">
           <span class="result-card-title">Pencil Sketch</span>
           <span class="result-card-method">Gaussian Blur Inversion</span>
         </div>
-        <div class="result-card-body"><div class="placeholder" id="sk-placeholder"><div class="loading-ring"></div>Processing…</div></div>
+        <div class="result-card-body" id="result-body-sk"><div class="placeholder" id="sk-placeholder"><div class="loading-ring"></div>Processing…</div></div>
       </div>
     </div>
   </div>
@@ -452,6 +452,14 @@ main { max-width: 1140px; margin: 0 auto; padding: 48px 32px 80px; }
 <script>
 /* ── State ─────────────────────────────────────────────────────────────────── */
 let selectedFile = null;
+let activeProcessAbort = null;
+
+function resetProcessButton() {
+  const btn = document.getElementById('process-btn');
+  if (!btn) return;
+  btn.disabled = !selectedFile;
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Pipeline`;
+}
 
 /* ── Toast ─────────────────────────────────────────────────────────────────── */
 function toast(msg, type = '') {
@@ -473,10 +481,17 @@ function setStage(n) {
 }
 
 /* ── Drop zone wiring ───────────────────────────────────────────────────────── */
-const dz   = document.getElementById('drop-zone');
-const fInp = document.getElementById('file-input');
+const dz = document.getElementById('drop-zone');
 
-dz.addEventListener('click',       () => fInp.click());
+dz.addEventListener('click', e => {
+  if (e.target.closest('#file-input')) return;
+  const inp = dz.querySelector('#file-input');
+  if (inp) inp.click();
+});
+dz.addEventListener('change', e => {
+  const t = e.target;
+  if (t && t.id === 'file-input' && t.files && t.files[0]) handleFile(t.files[0]);
+});
 dz.addEventListener('dragover',    e  => { e.preventDefault(); dz.classList.add('drag-over'); });
 dz.addEventListener('dragleave',   ()  => dz.classList.remove('drag-over'));
 dz.addEventListener('drop', e => {
@@ -484,15 +499,16 @@ dz.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f) handleFile(f);
 });
-fInp.addEventListener('change', e => {
-  if (e.target.files[0]) handleFile(e.target.files[0]);
-});
 
 function handleFile(file) {
   if (!file.type.startsWith('image/')) { toast('Please upload an image file.', 'error'); return; }
-  selectedFile = file;
 
-  // Preview inside drop zone
+  if (activeProcessAbort) activeProcessAbort.abort();
+
+  selectedFile = file;
+  resetProcessButton();
+
+  // Preview inside drop zone (file input stays inside #drop-zone; change is handled via delegation)
   const reader = new FileReader();
   reader.onload = ev => {
     dz.innerHTML = `
@@ -501,13 +517,9 @@ function handleFile(file) {
       <div class="dz-sub">Click to change image</div>
       <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/bmp" style="display:none"/>
     `;
-    document.getElementById('file-input').addEventListener('change', e => {
-      if (e.target.files[0]) handleFile(e.target.files[0]);
-    });
   };
   reader.readAsDataURL(file);
 
-  document.getElementById('process-btn').disabled = false;
   setStage(0);
   hideResults();
   toast('Image loaded — click "Run Pipeline" to process.', '');
@@ -520,18 +532,34 @@ function resetAll() {
 }
 
 /* ── Hide results ───────────────────────────────────────────────────────────── */
+function resetResultCards() {
+  // Always target stable body ids — placeholders are removed after the first run (replaced by <img>).
+  const origBody = document.getElementById('result-body-orig');
+  const stdBody  = document.getElementById('result-body-std');
+  const advBody  = document.getElementById('result-body-adv');
+  const skBody   = document.getElementById('result-body-sk');
+  if (!origBody || !stdBody || !advBody || !skBody) return;
+
+  origBody.innerHTML = `<div class="placeholder" id="orig-placeholder"><div class="loading-ring"></div>Loading…</div>`;
+  stdBody.innerHTML  = `<div class="placeholder" id="std-placeholder"><div class="loading-ring"></div>Processing…</div>`;
+  advBody.innerHTML  = `<div class="placeholder" id="adv-placeholder"><div class="loading-ring"></div>Processing…</div>`;
+  skBody.innerHTML   = `<div class="placeholder" id="sk-placeholder"><div class="loading-ring"></div>Processing…</div>`;
+}
+
 function hideResults() {
   document.getElementById('classification-box').style.display = 'none';
   document.getElementById('already-notice').style.display   = 'none';
   document.getElementById('results-section').style.display  = 'none';
+  resetResultCards();
   setStage(0);
 }
+
 
 /* ── Set image inside card ──────────────────────────────────────────────────── */
 function setCardImage(placeholderId, b64, altText) {
   const ph = document.getElementById(placeholderId);
-  if (!ph) return;
-  const card = ph.closest('.result-card-body');
+  const card = ph ? ph.closest('.result-card-body') : null;
+  if (!card) return;
   card.innerHTML = `<img src="${b64}" alt="${altText}" style="width:100%;height:280px;object-fit:contain;"/>`;
 }
 
@@ -542,6 +570,11 @@ async function processImage() {
   const btn = document.getElementById('process-btn');
   btn.disabled = true;
   btn.textContent = 'Processing…';
+
+  const prev = activeProcessAbort;
+  if (prev) prev.abort();
+  const ac = new AbortController();
+  activeProcessAbort = ac;
 
   hideResults();
   setStage(1);
@@ -555,12 +588,13 @@ async function processImage() {
   formData.append('method', method);
 
   try {
-    const resp = await fetch('/process', { method: 'POST', body: formData });
+    const resp = await fetch('/process', { method: 'POST', body: formData, signal: ac.signal });
     const data = await resp.json();
 
     if (!resp.ok || data.error) {
       toast('Error: ' + (data.error || 'Unknown error'), 'error');
       setStage(0);
+      if (activeProcessAbort === ac) hideResults();
       return;
     }
 
@@ -599,14 +633,14 @@ async function processImage() {
       // Still show original
       const rs = document.getElementById('results-section');
       rs.style.display = 'block';
-      document.getElementById('orig-placeholder').closest('.result-card-body').innerHTML =
+      document.getElementById('result-body-orig').innerHTML =
         `<img src="${data.original_b64}" alt="Original" style="width:100%;height:280px;object-fit:contain;"/>`;
-      document.getElementById('std-placeholder').closest('.result-card-body').innerHTML =
+      document.getElementById('result-body-std').innerHTML =
         `<div class="placeholder">Skipped — image is already a cartoon</div>`;
-      document.querySelectorAll('#adv-placeholder, #sk-placeholder').forEach(el => {
-        el.closest('.result-card-body').innerHTML =
-          `<div class="placeholder">Skipped — image is already a cartoon</div>`;
-      });
+      document.getElementById('result-body-adv').innerHTML =
+        `<div class="placeholder">Skipped — image is already a cartoon</div>`;
+      document.getElementById('result-body-sk').innerHTML =
+        `<div class="placeholder">Skipped — image is already a cartoon</div>`;
       setStage(4);
       toast('🎭 Cartoon detected — no transformation applied.', '');
       return;
@@ -618,43 +652,49 @@ async function processImage() {
     rs.style.display = 'block';
 
     // Original
-    document.getElementById('orig-placeholder').closest('.result-card-body').innerHTML =
+    document.getElementById('result-body-orig').innerHTML =
       `<img src="${data.original_b64}" alt="Original" style="width:100%;height:280px;object-fit:contain;"/>`;
 
     // Standard
     if (data.results.standard) {
-      document.getElementById('std-placeholder').closest('.result-card-body').innerHTML =
+      document.getElementById('result-body-std').innerHTML =
         `<img src="${data.results.standard}" alt="Standard" style="width:100%;height:280px;object-fit:contain;"/>`;
     } else {
-      document.getElementById('std-placeholder').textContent = 'Method failed';
+      document.getElementById('result-body-std').innerHTML =
+        `<div class="placeholder">Method failed</div>`;
     }
 
     // Advanced
     if (data.results.advanced) {
-      document.getElementById('adv-placeholder').closest('.result-card-body').innerHTML =
+      document.getElementById('result-body-adv').innerHTML =
         `<img src="${data.results.advanced}" alt="Advanced" style="width:100%;height:280px;object-fit:contain;"/>`;
     } else {
-      document.getElementById('adv-placeholder').textContent = 'Method failed';
+      document.getElementById('result-body-adv').innerHTML =
+        `<div class="placeholder">Method failed</div>`;
     }
 
     // Sketch
     if (data.results.sketch) {
-      document.getElementById('sk-placeholder').closest('.result-card-body').innerHTML =
+      document.getElementById('result-body-sk').innerHTML =
         `<img src="${data.results.sketch}" alt="Sketch" style="width:100%;height:280px;object-fit:contain;"/>`;
     } else {
-      document.getElementById('sk-placeholder').textContent = 'Method failed';
+      document.getElementById('result-body-sk').innerHTML =
+        `<div class="placeholder">Method failed</div>`;
     }
 
     setStage(4);
     toast('✓ Pipeline complete!', '');
 
   } catch (err) {
+    if (err.name === 'AbortError') return;
     toast('Network error — is the server running?', 'error');
     setStage(0);
     console.error(err);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Pipeline`;
+    if (activeProcessAbort === ac) {
+      activeProcessAbort = null;
+      resetProcessButton();
+    }
   }
 }
 
